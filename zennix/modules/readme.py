@@ -1,6 +1,7 @@
 # zennix/core/readme.py
 
 from zennix.utils.llm.groq_client import generate_response
+from zennix.utils import file_ops
 
 class ZennixReadme:
     def __init__(self, project_path: str, model: str = "llama-3.3-70b-versatile"):
@@ -25,9 +26,9 @@ class ZennixReadme:
         Include sections like: Introduction, Features, Installation, Usage, CLI, Contribution, License.
         """
 
-    def create_readme(self, output_path="README.md"):
+    def create_readme(self, output_path="data/"):
         context = self.scan_codebase()
         prompt = self.generate_prompt(context)
         readme_content = generate_response(user_prompt=prompt, llm_model=self.model)
-        with open(output_path, "w") as f:
-            f.write(readme_content)
+        
+        file_ops.save_file(readme_content, output_path, "README.md")
