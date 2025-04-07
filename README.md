@@ -52,8 +52,7 @@ Zennix is licensed under the MIT License. See the [LICENSE](LICENSE) file for mo
 
 Zennix would not be possible without the contributions of the following individuals:
 
-* [Your Name]
-* [Other Contributors]
+* Gopal Goyal
 
 **Getting Started**
 -------------------
