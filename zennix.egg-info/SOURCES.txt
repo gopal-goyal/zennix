@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+setup.py
+zennix/__init__.py
+zennix/cli.py
+zennix.egg-info/PKG-INFO
+zennix.egg-info/SOURCES.txt
+zennix.egg-info/dependency_links.txt
+zennix.egg-info/entry_points.txt
+zennix.egg-info/requires.txt
+zennix.egg-info/top_level.txt
+zennix/commands/__init__.py
+zennix/commands/generate.py
