@@ -7,6 +7,7 @@ from pprint import pformat
 class FolderInfo:
     name: str
     files: int
+    ignored: List[str] = field(default_factory=list)  # e.g. symlinks, hidden files
 
 @dataclass
 class FileInfo:
@@ -55,6 +56,9 @@ class ProjectMetadata:
     has_makefile: bool = False
     ci_cd: List[str] = field(default_factory=list)
     scripts: List[str] = field(default_factory=list)
+
+    ignored_folders: List[str] = field(default_factory=list)
+    ignored_symlinks: List[str] = field(default_factory=list)
 
     def summary(self) -> str:
         summary_lines = [

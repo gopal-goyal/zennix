@@ -1,8 +1,9 @@
 # zennix/core/project_scanner.py
 
 import os
+import re
 from zennix.utils.logger import get_logger
-from zennix.modules.project_metadata import ProjectMetadata, FileInfo, FolderInfo
+from zennix.modules.project_metadata import ProjectMetadata, FileInfo, FolderInfo, SymbolInfo
 from typing import List, Dict, Optional, Tuple
 from collections import Counter
 
@@ -14,15 +15,27 @@ class ProjectScanner:
         self.project_path = os.path.abspath(project_path)
         self.deep_scan = deep_scan
         self.ignored_folders = {".git", "__pycache__", "venv", ".venv", "node_modules", "dist", "build", ".idea", ".vscode"}
+
+        if not os.path.exists(self.project_path):
+            raise FileNotFoundError(f"Path does not exist: {self.project_path}")
+        if not os.path.isdir(self.project_path):
+            raise NotADirectoryError(f"Expected directory, got file: {self.project_path}")
+
         logger.info(f"🛰️  Scanner initialized for path: {self.project_path} (deep={self.deep_scan})")
 
     def scan(self) -> ProjectMetadata:
         logger.info("🔍 Starting project scan...\n")
 
-        folders_info = self._scan_folders()
+        folders_info, ignored_folders, ignored_symlinks = self._scan_folders()
         files_info = self._scan_files(folders_info)
         languages, primary_lang = self._detect_languages(files_info)
         entry_points = self._find_entry_points(files_info)
+        documentation_info = self._extract_documents()
+        dependencies_info = self._detect_dependencies()
+        symbols_info = self._extract_symbols(files_info)
+        runtime_envs_info = self._detect_runtime_envs()
+        ci_cd_info = self._detect_ci_cd()
+        dockerfile_info, makefile_info = self._check_dockerfile_makefile()
 
         logger.info("✅ Metadata extraction complete")
 
@@ -33,23 +46,58 @@ class ProjectScanner:
             languages=languages,
             primary_language=primary_lang,
             entry_points=entry_points,
-            # You can fill more metadata fields in future
+            ignored_folders=ignored_folders,
+            ignored_symlinks=ignored_symlinks,
+            documentation=documentation_info,
+            dependencies=dependencies_info,
+            symbols=symbols_info,
+            runtime_envs=runtime_envs_info,
+            ci_cd=ci_cd_info,
+            has_dockerfile=dockerfile_info,
+            has_makefile=makefile_info
         )
 
-    def _scan_folders(self) -> List[FolderInfo]:
+    def _scan_folders(self) -> Tuple[List[FolderInfo], List[str], List[str]]:
         logger.info("📁 Scanning folders...")
         folders = []
+        ignored_folders = []
+        ignored_symlinks = []
 
-        for root, dirs, _ in os.walk(self.project_path):
-            dirs[:] = [d for d in dirs if d not in self.ignored_folders]
-            rel_root = os.path.relpath(root, self.project_path)
-            folder_name = "." if rel_root == "." else rel_root
-            folder_depth = rel_root.count(os.sep)
-            indent = "│   " * folder_depth
-            folders.append(FolderInfo(name=folder_name, files=len(os.listdir(root))))
-            logger.info(f"{indent}📁 {folder_name}/")
+        for root, dirs, _ in os.walk(self.project_path, topdown=True, followlinks=False):
+            ignored_in_this_folder = []
 
-        return folders
+            try:
+                rel_root = os.path.relpath(root, self.project_path)
+                folder_name = "." if rel_root == "." else rel_root
+                folder_depth = rel_root.count(os.sep)
+                indent = "│   " * folder_depth
+
+                # Filter subdirectories
+                original_dirs = list(dirs)
+                dirs[:] = []
+                for d in original_dirs:
+                    full_path = os.path.join(root, d)
+                    if d in self.ignored_folders:
+                        ignored_folders.append(full_path)
+                        ignored_in_this_folder.append(d)
+                    elif os.path.islink(full_path):
+                        ignored_symlinks.append(full_path)
+                        ignored_in_this_folder.append(d)
+                    else:
+                        dirs.append(d)
+
+                folders.append(FolderInfo(
+                    name=folder_name,
+                    files=len([f for f in os.listdir(root) if not f.startswith('.')]),
+                    ignored=ignored_in_this_folder
+                ))
+                logger.debug(f"{indent}📁 {folder_name}/ (ignored: {len(ignored_in_this_folder)})")
+
+            except PermissionError:
+                logger.warning(f"⚠️ Skipping folder (permission denied): {root}")
+                continue
+
+        return folders, ignored_folders, ignored_symlinks
 
     def _scan_files(self, folders_info: List[FolderInfo]) -> List[FileInfo]:
         logger.info("📄 Scanning files...")
@@ -72,14 +120,19 @@ class ProjectScanner:
         return files
 
     def _get_extension(self, filename: str) -> str:
-        return os.path.splitext(filename)[-1].lower()
+        _, ext = os.path.splitext(filename)
+        return ext.lower().strip() if ext else "no_ext"
 
     def _count_lines(self, file_path: str) -> int:
         try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 return sum(1 for _ in f)
-        except Exception:
-            return 0
+        except UnicodeDecodeError:
+            with open(file_path, "rb") as f:  # count newlines in binary
+                return f.read().count(b"\n")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not read file: {file_path} ({e})")
+            return -1  # or None
 
     def _detect_languages(self, files: List[FileInfo]) -> Tuple[Dict[str, int], str]:
 
@@ -97,13 +150,193 @@ class ProjectScanner:
         languages = dict(lang_count)
         primary = lang_count.most_common(1)[0][0] if lang_count else ""
 
-        logger.info(f"🧠 Detected languages: {languages}")
         return languages, primary
 
     def _find_entry_points(self, files: List[FileInfo]) -> List[str]:
-        entry_keywords = {"main.py", "index.js", "app.py", "run.py", "cli.py"}
-        entry_points = [file.path for file in files if os.path.basename(file.path) in entry_keywords]
+        # Heuristics-based search for entry points
+        entry_points = []
+
+        # Common entry point files (a fallback)
+        common_entry_files = {"main.py", "index.js", "app.py", "server.py", "run.py", "cli.py"}
+        
+        # Scan through files and identify possible entry points
+        for file in files:
+            file_path = file.path
+            file_name = os.path.basename(file_path)
+
+            # First, check if the file is in the common entry file list
+            if file_name in common_entry_files:
+                entry_points.append(file_path)
+                continue  # Skip further checks for these files
+
+            # Check if the file contains a 'main' function or entry-like code (Python, JS, etc.)
+            if self._contains_main_function(file_path):
+                entry_points.append(file_path)
+
+        # Log detected entry points
         if entry_points:
-            logger.info(f"🚀 Entry points: {entry_points}")
+            logger.info(f"🚀 Detected entry points: {entry_points}")
+        else:
+            logger.info("⚠️ No obvious entry points found.")
+
         return entry_points
 
+    def _contains_main_function(self, file_path: str) -> bool:
+        """Check if the file contains a main function or entry point."""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+                # Check for Python main function (if __name__ == "__main__":)
+                if re.search(r'\s*if\s+__name__\s*==\s*["\']__main__["\']\s*:', content):
+                    return True
+                
+                # Check for JavaScript main function (function main())
+                if re.search(r'\bfunction\s+main\s*\(', content):
+                    return True
+
+                # Add more language checks here as needed (e.g., Go, Ruby)
+
+                # Could also check for "run" or "start" functions, or other specific patterns
+                if re.search(r'\bdef\s+run\s*\(', content):  # Common for CLI-based Python apps
+                    return True
+
+        except Exception as e:
+            logger.warning(f"⚠️ Error reading file {file_path}: {e}")
+
+        return False
+
+    def _extract_documents(self):
+        """Scan the entire project for documentation files (e.g., README.md, LICENSE, CHANGELOG.md, etc.) and extract metadata."""
+        docs = []
+        # Common documentation filenames to look for
+        doc_filenames = [
+            'README.md', 'LICENSE', 'CONTRIBUTING.md', 'CHANGELOG.md', 
+            'USAGE.md', 'INSTALL.md', 'TODO.md', 'docs', 'docs/index.rst'
+        ]
+        
+        # Walk through the entire project directory
+        for root, dirs, files in os.walk(self.project_path):
+            for doc in doc_filenames:
+                doc_path = os.path.join(root, doc)
+                if os.path.exists(doc_path):
+                    file_metadata = self._get_documentation_metadata(doc_path)
+                    docs.append(file_metadata)
+        
+        return docs
+
+    def _get_documentation_metadata(self, doc_path: str) -> Dict[str, Optional[str]]:
+        """Helper method to get detailed metadata for a documentation file."""
+        # Extract file extension
+        _, ext = os.path.splitext(doc_path)
+        ext = ext.lower().strip() if ext else "no_ext"
+
+        # Extract basic metadata: file path, extension
+        file_metadata = {
+            'path': doc_path,
+            'ext': ext,
+            'purpose': self._detect_documentation_purpose(doc_path),  # Purpose based on file name or content
+        }
+
+        return file_metadata
+
+    def _detect_documentation_purpose(self, doc_path: str) -> Optional[str]:
+        """Heuristic to determine the purpose of a documentation file based on its name or contents."""
+        # Basic checks based on the filename (this could be expanded further)
+        if 'README' in doc_path:
+            return 'Overview of the project'
+        elif 'LICENSE' in doc_path:
+            return 'Licensing information'
+        elif 'CONTRIBUTING' in doc_path:
+            return 'Guidelines for contributing'
+        elif 'CHANGELOG' in doc_path:
+            return 'Project changelog'
+        elif 'USAGE' in doc_path:
+            return 'Usage instructions'
+        elif 'INSTALL' in doc_path:
+            return 'Installation instructions'
+        elif 'TODO' in doc_path:
+            return 'List of TODOs or roadmap'
+        elif 'docs' in doc_path:
+            return 'Project documentation files (index or other content)'
+        else:
+            return 'General documentation'
+
+    def _detect_dependencies(self) -> Dict[str, str]:
+        """Detect dependencies from files like requirements.txt, package.json, etc."""
+        dep_files = {}
+        for dep_file in ['requirements.txt', 'package.json', 'Pipfile']:
+            dep_path = os.path.join(self.project_path, dep_file)
+            if os.path.exists(dep_path):
+                with open(dep_path, 'r') as file:
+                    content = file.read()
+                    # For simplicity, assuming dependencies are in a basic format, you can extend this
+                    if dep_file == 'requirements.txt':
+                        dep_files[dep_file] = content
+                    elif dep_file == 'package.json':
+                        dep_files[dep_file] = content  # Parse dependencies from JSON
+                    elif dep_file == 'Pipfile':
+                        dep_files[dep_file] = content  # Parse dependencies from Pipfile
+        return dep_files
+    
+    def _extract_symbols(self, files_info: List[FileInfo]) -> List[SymbolInfo]:
+        """Extract symbols like functions, classes, and imports from Python files."""
+        symbols = []
+        
+        for file_info in files_info:
+            # Skip non-Python files (e.g., .md, .log, .json, .toml, etc.)
+            if file_info.ext != ".py":
+                continue
+            
+            file_path = os.path.join(self.project_path, file_info.path)
+            symbol_info = SymbolInfo(path=file_path)
+
+            # Only read Python files
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+                # Extract classes, functions, and imports using regex
+                symbol_info.classes = re.findall(r'class (\w+)', content)
+                symbol_info.functions = re.findall(r'def (\w+)', content)
+                symbol_info.imports = re.findall(r'import (\w+)', content)
+
+            symbols.append(symbol_info)
+        
+        return symbols
+    
+    def _detect_runtime_envs(self) -> List[str]:
+        """Detect runtime environments like Dockerfile, .env, and virtual environments."""
+        envs = []
+        
+        # Check for Dockerfile or .env
+        for env_file in ['Dockerfile', '.env']:
+            env_path = os.path.join(self.project_path, env_file)
+            if os.path.exists(env_path):
+                envs.append(env_file)
+        
+        # Check for virtual environments
+        possible_venv_dirs = ['venv', 'env', 'myenv', 'virtualenv']
+        for root, dirs, _ in os.walk(self.project_path):
+            for dir_name in dirs:
+                if dir_name.lower() in possible_venv_dirs:
+                    venv_path = os.path.join(root, dir_name)
+                    # Check if it contains a 'pyvenv.cfg' file, which is an indicator of a Python virtual environment
+                    if os.path.exists(os.path.join(venv_path, 'pyvenv.cfg')):
+                        envs.append(f"Virtual Environment: {venv_path}")
+        
+        return envs
+
+    def _detect_ci_cd(self) -> List[str]:
+        """Detect CI/CD configurations (e.g., GitHub Actions, GitLab CI)."""
+        ci_cd_files = []
+        for ci_file in ['.github', '.gitlab-ci.yml']:
+            ci_path = os.path.join(self.project_path, ci_file)
+            if os.path.exists(ci_path):
+                ci_cd_files.append(ci_path)
+        return ci_cd_files
+
+    def _check_dockerfile_makefile(self) -> Tuple[bool, bool]:
+        """Check if the project contains Dockerfile and Makefile."""
+        has_dockerfile = os.path.exists(os.path.join(self.project_path, 'Dockerfile'))
+        has_makefile = os.path.exists(os.path.join(self.project_path, 'Makefile'))
+        return has_dockerfile, has_makefile

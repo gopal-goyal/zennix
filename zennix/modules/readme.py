@@ -1,7 +1,6 @@
 # zennix/core/readme.py
 
 from zennix.utils.llm.groq_client import generate_response
-from zennix.utils import file_ops
 
 class ZennixReadme:
     def __init__(self, project_path: str, model: str = "llama-3.3-70b-versatile"):
@@ -30,5 +29,7 @@ class ZennixReadme:
         context = self.scan_codebase()
         prompt = self.generate_prompt(context)
         readme_content = generate_response(user_prompt=prompt, llm_model=self.model)
+
+        return readme_content
         
-        file_ops.save_file(readme_content, output_path, "README.md")
+        

@@ -1,6 +1,7 @@
 # zennix/commands/scan.py
 from typer import Typer, Option, secho, colors
 from zennix.modules.scanner import ProjectScanner
+from zennix.utils import file_ops
 import os
 
 app = Typer(help="Scan your project and extract structured metadata.")
@@ -13,6 +14,8 @@ def scan(
     """Scan the project and display a summary of its structure."""
     scanner = ProjectScanner(project_path=path, deep_scan=deep)
     metadata = scanner.scan()
+
+    file_ops.save_file(metadata, "data/scan_results", "scan.json") # Save the scan results
 
     # Show the tree view
     secho("\n📂 Project Structure:\n", fg=colors.CYAN, bold=True)
