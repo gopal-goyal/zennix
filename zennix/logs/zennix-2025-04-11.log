@@ -1,0 +1,51 @@
+2025-04-11 23:38:39,898 | INFO | scanner | 🛰️  Scanner initialized for path: /Users/scrapper/Downloads/projects/zennix (deep=False)
+2025-04-11 23:38:39,898 | INFO | scanner | 🔍 Starting project scan...
+
+2025-04-11 23:38:39,898 | INFO | scanner | 📁 ./
+2025-04-11 23:38:39,898 | INFO | scanner | │   └── 📄 .DS_Store (, 1 lines)
+2025-04-11 23:38:39,899 | INFO | scanner | │   └── 📄 pyproject.toml (.toml, 38 lines)
+2025-04-11 23:38:39,899 | INFO | scanner | │   └── 📄 README.md (.md, 62 lines)
+2025-04-11 23:38:39,899 | INFO | scanner | │   └── 📄 setup.py (.py, 18 lines)
+2025-04-11 23:38:39,899 | INFO | scanner | │   └── 📄 .gitignore (, 5 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | 📁 zennix.egg-info/
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 PKG-INFO (, 85 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 SOURCES.txt (.txt, 14 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 entry_points.txt (.txt, 2 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 requires.txt (.txt, 2 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 top_level.txt (.txt, 1 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | │   └── 📄 dependency_links.txt (.txt, 1 lines)
+2025-04-11 23:38:39,900 | INFO | scanner | 📁 tests/
+2025-04-11 23:38:39,900 | INFO | scanner | 📁 docs/
+2025-04-11 23:38:39,901 | INFO | scanner | │   └── 📄 notes.txt (.txt, 18 lines)
+2025-04-11 23:38:39,901 | INFO | scanner | │   └── 📄 project_scanner_output_example.md (.md, 91 lines)
+2025-04-11 23:38:39,901 | INFO | scanner | │   └── 📄 todo.md (.md, 33 lines)
+2025-04-11 23:38:39,901 | INFO | scanner | 📁 data/
+2025-04-11 23:38:39,901 | INFO | scanner | │   📁 data/scan_results/
+2025-04-11 23:38:39,901 | INFO | scanner | │   📁 data/readme_files/
+2025-04-11 23:38:39,902 | INFO | scanner | │   │   └── 📄 README_20250407_185700.md (.md, 87 lines)
+2025-04-11 23:38:39,902 | INFO | scanner | │   │   └── 📄 README.md (.md, 70 lines)
+2025-04-11 23:38:39,902 | INFO | scanner | │   │   └── 📄 README_20250407_210212.md (.md, 73 lines)
+2025-04-11 23:38:39,902 | INFO | scanner | 📁 zennix/
+2025-04-11 23:38:39,902 | INFO | scanner | │   └── 📄 __init__.py (.py, 0 lines)
+2025-04-11 23:38:39,902 | INFO | scanner | │   └── 📄 cli.py (.py, 40 lines)
+2025-04-11 23:38:39,902 | INFO | scanner | │   📁 zennix/utils/
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   └── 📄 file_ops.py (.py, 20 lines)
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   └── 📄 logger.py (.py, 29 lines)
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   📁 zennix/utils/llm/
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   │   └── 📄 __init__.py (.py, 0 lines)
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   │   └── 📄 groq_client.py (.py, 39 lines)
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   📁 zennix/utils/logs/
+2025-04-11 23:38:39,903 | INFO | scanner | │   📁 zennix/logs/
+2025-04-11 23:38:39,903 | INFO | scanner | │   │   └── 📄 zennix-2025-04-11.log (.log, 38 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 zennix.log (.log, 197 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   📁 zennix/commands/
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 generate.py (.py, 13 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 __init__.py (.py, 0 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 scan.py (.py, 35 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   📁 zennix/modules/
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 scanner.py (.py, 62 lines)
+2025-04-11 23:38:39,904 | INFO | scanner | │   │   └── 📄 readme.py (.py, 34 lines)
+2025-04-11 23:38:39,905 | INFO | scanner | │   │   └── 📄 project_metadata.py (.py, 56 lines)
+2025-04-11 23:38:39,905 | INFO | scanner | 
+✅ Scan complete!
+Total folders: 14 | Total files: 31
