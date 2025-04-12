@@ -2,6 +2,7 @@ import typer
 from typing import Optional
 from typer.models import Context
 from zennix.commands import generate
+from zennix.commands import scan
 
 app = typer.Typer(
     epilog="✨ Built with love by the Zennix team.",
@@ -9,7 +10,7 @@ app = typer.Typer(
     )  # This sets up the CLI group
 
 app.add_typer(generate.app, name="generate", help="Generate project files like README, usage docs, and more!")
-
+app.command()(scan.scan)
 @app.command()
 def welcome(name: str = "Zennits"):
     """Welcome to Zennix World! Hope it'll help you out with your stuff."""
