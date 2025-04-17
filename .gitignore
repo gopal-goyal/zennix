@@ -3,3 +3,4 @@ __pycache__/
 docs
 *.egg-info/
 data
+zennix/logs/

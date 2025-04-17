@@ -2,12 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from datetime import datetime
 from pprint import pformat
-
-@dataclass
-class FolderInfo:
-    name: str
-    files: int
-    ignored: List[str] = field(default_factory=list)  # e.g. symlinks, hidden files
+from zennix.core.folder_scanner.base import FolderInfo
 
 @dataclass
 class FileInfo:

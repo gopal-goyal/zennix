@@ -3,7 +3,8 @@
 import os
 import re
 from zennix.utils.logger import get_logger
-from zennix.modules.project_metadata import ProjectMetadata, FileInfo, FolderInfo, SymbolInfo
+from zennix.core.project_metadata import ProjectMetadata, FileInfo, SymbolInfo
+from zennix.core.folder_scanner.base import FolderScanner, FolderInfo
 from typing import List, Dict, Optional, Tuple
 from collections import Counter
 
@@ -12,6 +13,7 @@ logger = get_logger("scanner")
 
 class ProjectScanner:
     def __init__(self, project_path: str, deep_scan: bool):
+        self. scan_state = {}
         self.project_path = os.path.abspath(project_path)
         self.deep_scan = deep_scan
         self.ignored_folders = {".git", "__pycache__", "venv", ".venv", "node_modules", "dist", "build", ".idea", ".vscode"}
@@ -20,84 +22,128 @@ class ProjectScanner:
             raise FileNotFoundError(f"Path does not exist: {self.project_path}")
         if not os.path.isdir(self.project_path):
             raise NotADirectoryError(f"Expected directory, got file: {self.project_path}")
+        
+        self.folder_scanner = FolderScanner(
+            project_path=self.project_path,
+            max_depth=20 if deep_scan else 10,
+            max_items=2000 if deep_scan else 1000
+        )
 
         logger.info(f"🛰️  Scanner initialized for path: {self.project_path} (deep={self.deep_scan})")
 
     def scan(self) -> ProjectMetadata:
-        logger.info("🔍 Starting project scan...\n")
+        logger.info("🧠 Starting intelligent project scan...")
 
-        folders_info, ignored_folders, ignored_symlinks = self._scan_folders()
+        self._scan_filesystem()
+        self._analyze_structure()
+        self._infer_intent()
+        self._extract_knowledge()
+        self._generate_metadata()
+
+        return self.metadata
+
+    def _scan_filesystem(self):
+        logger.info("📂 Scanning filesystem...")
+        folders_info, ignored_folders, ignored_symlinks = self.folder_scanner.scan()
         files_info = self._scan_files(folders_info)
-        languages, primary_lang = self._detect_languages(files_info)
-        entry_points = self._find_entry_points(files_info)
-        documentation_info = self._extract_documents()
-        dependencies_info = self._detect_dependencies()
-        symbols_info = self._extract_symbols(files_info)
-        runtime_envs_info = self._detect_runtime_envs()
-        ci_cd_info = self._detect_ci_cd()
-        dockerfile_info, makefile_info = self._check_dockerfile_makefile()
 
-        logger.info("✅ Metadata extraction complete")
+        self.scan_state.update({
+            "folders": folders_info,
+            "files": files_info,
+            "ignored_folders": ignored_folders,
+            "ignored_symlinks": ignored_symlinks,
+        })
 
-        return ProjectMetadata(
+    def _analyze_structure(self):
+        logger.info("🧱 Analyzing project structure...")
+        languages, primary_lang = self._detect_languages(self.scan_state["files"])
+        entry_points = self._find_entry_points(self.scan_state["files"])
+        docs = self._extract_documents()
+
+        self.scan_state.update({
+            "languages": languages,
+            "primary_language": primary_lang,
+            "entry_points": entry_points,
+            "documentation": docs,
+        })
+
+    def _infer_intent(self):
+        logger.info("🔮 Inferring project intent...")
+
+        # Example heuristic: if it has `cli.py`, no frontend, and entry is main.py => CLI tool
+        structure = self.scan_state.get("folders", [])
+        files = self.scan_state.get("files", [])
+        entry = self.scan_state.get("entry_points", [])
+
+        # TODO: smarter logic with a classifier or LLM in the future
+        intent = "CLI tool" if any("cli.py" in f.path for f in files) else "Unknown"
+
+        self.scan_state["intent"] = intent
+
+    def _extract_knowledge(self):
+        logger.info("🧠 Extracting symbols and inferred logic...")
+        files = self.scan_state["files"]
+        self.scan_state["symbols"] = self._extract_symbols(files)
+
+        # Infer additional knowledge later like CI/CD or framework detection
+        self.scan_state["dependencies"] = self._detect_dependencies()
+        self.scan_state["runtime_envs"] = self._detect_runtime_envs()
+        self.scan_state["ci_cd"] = self._detect_ci_cd()
+        self.scan_state["dockerfile"], self.scan_state["makefile"] = self._check_dockerfile_makefile()
+
+    def _generate_metadata(self):
+        logger.info("🗂️ Generating ProjectMetadata object...")
+        self.metadata = ProjectMetadata(
             root_path=self.project_path,
-            folders=folders_info,
-            files=files_info,
-            languages=languages,
-            primary_language=primary_lang,
-            entry_points=entry_points,
-            ignored_folders=ignored_folders,
-            ignored_symlinks=ignored_symlinks,
-            documentation=documentation_info,
-            dependencies=dependencies_info,
-            symbols=symbols_info,
-            runtime_envs=runtime_envs_info,
-            ci_cd=ci_cd_info,
-            has_dockerfile=dockerfile_info,
-            has_makefile=makefile_info
+            folders=self.scan_state["folders"],
+            files=self.scan_state["files"],
+            languages=self.scan_state["languages"],
+            primary_language=self.scan_state["primary_language"],
+            entry_points=self.scan_state["entry_points"],
+            ignored_folders=self.scan_state["ignored_folders"],
+            ignored_symlinks=self.scan_state["ignored_symlinks"],
+            documentation=self.scan_state["documentation"],
+            dependencies=self.scan_state["dependencies"],
+            symbols=self.scan_state["symbols"],
+            runtime_envs=self.scan_state["runtime_envs"],
+            ci_cd=self.scan_state["ci_cd"],
+            has_dockerfile=self.scan_state["dockerfile"],
+            has_makefile=self.scan_state["makefile"],
         )
 
-    def _scan_folders(self) -> Tuple[List[FolderInfo], List[str], List[str]]:
-        logger.info("📁 Scanning folders...")
-        folders = []
-        ignored_folders = []
-        ignored_symlinks = []
+    # def scan(self) -> ProjectMetadata:
+    #     logger.info("🔍 Starting project scan...\n")
 
-        for root, dirs, _ in os.walk(self.project_path, topdown=True, followlinks=False):
-            ignored_in_this_folder = []
+    #     folders_info, ignored_folders, ignored_symlinks = self.folder_scanner.scan()
+    #     files_info = self._scan_files(folders_info)
+    #     languages, primary_lang = self._detect_languages(files_info)
+    #     entry_points = self._find_entry_points(files_info)
+    #     documentation_info = self._extract_documents()
+    #     dependencies_info = self._detect_dependencies()
+    #     symbols_info = self._extract_symbols(files_info)
+    #     runtime_envs_info = self._detect_runtime_envs()
+    #     ci_cd_info = self._detect_ci_cd()
+    #     dockerfile_info, makefile_info = self._check_dockerfile_makefile()
 
-            try:
-                rel_root = os.path.relpath(root, self.project_path)
-                folder_name = "." if rel_root == "." else rel_root
-                folder_depth = rel_root.count(os.sep)
-                indent = "│   " * folder_depth
+    #     logger.info("✅ Metadata extraction complete")
 
-                # Filter subdirectories
-                original_dirs = list(dirs)
-                dirs[:] = []
-                for d in original_dirs:
-                    full_path = os.path.join(root, d)
-                    if d in self.ignored_folders:
-                        ignored_folders.append(full_path)
-                        ignored_in_this_folder.append(d)
-                    elif os.path.islink(full_path):
-                        ignored_symlinks.append(full_path)
-                        ignored_in_this_folder.append(d)
-                    else:
-                        dirs.append(d)
-
-                folders.append(FolderInfo(
-                    name=folder_name,
-                    files=len([f for f in os.listdir(root) if not f.startswith('.')]),
-                    ignored=ignored_in_this_folder
-                ))
-                logger.debug(f"{indent}📁 {folder_name}/ (ignored: {len(ignored_in_this_folder)})")
-
-            except PermissionError:
-                logger.warning(f"⚠️ Skipping folder (permission denied): {root}")
-                continue
-
-        return folders, ignored_folders, ignored_symlinks
+    #     return ProjectMetadata(
+    #         root_path=self.project_path,
+    #         folders=folders_info,
+    #         files=files_info,
+    #         languages=languages,
+    #         primary_language=primary_lang,
+    #         entry_points=entry_points,
+    #         ignored_folders=ignored_folders,
+    #         ignored_symlinks=ignored_symlinks,
+    #         documentation=documentation_info,
+    #         dependencies=dependencies_info,
+    #         symbols=symbols_info,
+    #         runtime_envs=runtime_envs_info,
+    #         ci_cd=ci_cd_info,
+    #         has_dockerfile=dockerfile_info,
+    #         has_makefile=makefile_info
+    #     )
 
     def _scan_files(self, folders_info: List[FolderInfo]) -> List[FileInfo]:
         logger.info("📄 Scanning files...")

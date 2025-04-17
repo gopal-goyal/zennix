@@ -1,5 +1,5 @@
 from typer import Typer, Option, secho, colors
-from zennix.modules.readme import ZennixReadme
+from zennix.core.readme import ZennixReadme
 from zennix.utils import file_ops
 app = Typer()
 

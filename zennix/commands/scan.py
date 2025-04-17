@@ -1,6 +1,6 @@
 # zennix/commands/scan.py
 from typer import Typer, Option, secho, colors
-from zennix.modules.scanner import ProjectScanner
+from zennix.core.project_scanner import ProjectScanner
 from zennix.utils import file_ops
 import os
 
